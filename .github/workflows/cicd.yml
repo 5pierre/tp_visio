@@ -68,23 +68,27 @@ jobs:
           username: ${{ secrets.VM_USER }}
           password: ${{ secrets.VM_PASSWORD }}
           script: |
-            cd ~/tp_visio
-
-            # Récupérer le dernier code
-            git pull origin main
-
-            # Mettre à jour les images Kubernetes (rolling update sans downtime)
+            # Mettre à jour les images Kubernetes (rolling update)
+            # git pull supprimé : les images sont déjà pushées sur DockerHub par le job précédent
             kubectl set image deployment/backend backend=${{ secrets.DOCKERHUB_USERNAME }}/backend:latest
             kubectl set image deployment/frontend frontend=${{ secrets.DOCKERHUB_USERNAME }}/frontend:latest
 
-            # Attendre que les pods redémarrent
+            # Forcer le rechargement des images (au cas où le tag :latest n'a pas changé)
+            kubectl rollout restart deployment/backend
+            kubectl rollout restart deployment/frontend
+
+            # Attendre que les pods soient prêts
             kubectl rollout status deployment/backend
             kubectl rollout status deployment/frontend
 
-            # Relancer les port-forwards (tuer les anciens d'abord)
+            # Tuer les anciens port-forwards
             pkill -f "kubectl port-forward" || true
             sleep 2
-            nohup kubectl port-forward --address 0.0.0.0 service/frontend-service 80:80 > /tmp/pf-frontend.log 2>&1 &
+
+            # Port-forward backend : port 30000 (pas besoin de sudo, >1024)
             nohup kubectl port-forward --address 0.0.0.0 service/backend-service 30000:3000 > /tmp/pf-backend.log 2>&1 &
+
+            # Port-forward frontend : port 8080 (pas besoin de sudo, >1024)
+            nohup kubectl port-forward --address 0.0.0.0 service/frontend-service 8080:80 > /tmp/pf-frontend.log 2>&1 &
 
             echo "✅ Déploiement terminé !"

@@ -20,9 +20,11 @@
         async function testConnection() {
             const resDiv = document.getElementById('resultat');
             try {
+                // En local : backend sur port 3000
+                // En prod (VM Azure) : backend exposé via port-forward sur 30000
                 const backendUrl = window.location.hostname === 'localhost'
-                    ? 'http://localhost:3000'        // local : port direct
-                    : `http://${window.location.hostname}:30000`; // prod : NodePort K8s
+                    ? 'http://localhost:3000'
+                    : `http://${window.location.hostname}:30000`;
                 const response = await fetch(`${backendUrl}/health`);
                 const data = await response.json();
                 resDiv.innerHTML = `✅ Backend répond : ${data.status}`;
