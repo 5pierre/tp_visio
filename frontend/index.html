@@ -21,8 +21,8 @@
             const resDiv = document.getElementById('resultat');
             try {
                 const backendUrl = window.location.hostname === 'localhost'
-                    ? 'http://localhost:3000'
-                    : `http://${window.location.hostname}:3000`;
+                    ? 'http://localhost:3000'        // local : port direct
+                    : `http://${window.location.hostname}:30000`; // prod : NodePort K8s
                 const response = await fetch(`${backendUrl}/health`);
                 const data = await response.json();
                 resDiv.innerHTML = `✅ Backend répond : ${data.status}`;

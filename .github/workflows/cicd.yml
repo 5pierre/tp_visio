@@ -31,7 +31,7 @@ jobs:
   build-and-push:
     name: Build & Push Docker
     runs-on: ubuntu-latest
-    needs: test          # bloqué si les tests échouent
+    needs: test
     steps:
       - uses: actions/checkout@v4
 
@@ -55,7 +55,7 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/frontend:latest
 
-  # ── 3. Déploiement sur VM Azure (connexion par mot de passe) ────
+  # ── 3. Déploiement sur VM Azure ─────────────────────────────────
   deploy:
     name: Déploiement Azure VM
     runs-on: ubuntu-latest
@@ -67,22 +67,24 @@ jobs:
           host: ${{ secrets.VM_IP }}
           username: ${{ secrets.VM_USER }}
           password: ${{ secrets.VM_PASSWORD }}
-          # ⚠️ Authentification par mot de passe uniquement (pas de clé SSH)
           script: |
-            cd ~/projet_final_integration_deploiement
+            cd ~/tp_visio
 
             # Récupérer le dernier code
             git pull origin main
 
-            # Mettre à jour les images dans le cluster
-            kubectl set image deployment/backend \
-              backend=${{ secrets.DOCKERHUB_USERNAME }}/backend:latest
+            # Mettre à jour les images Kubernetes (rolling update sans downtime)
+            kubectl set image deployment/backend backend=${{ secrets.DOCKERHUB_USERNAME }}/backend:latest
+            kubectl set image deployment/frontend frontend=${{ secrets.DOCKERHUB_USERNAME }}/frontend:latest
 
-            kubectl set image deployment/frontend \
-              frontend=${{ secrets.DOCKERHUB_USERNAME }}/frontend:latest
-
-            # Vérifier que les pods redémarrent bien
+            # Attendre que les pods redémarrent
             kubectl rollout status deployment/backend
             kubectl rollout status deployment/frontend
+
+            # Relancer les port-forwards (tuer les anciens d'abord)
+            pkill -f "kubectl port-forward" || true
+            sleep 2
+            nohup kubectl port-forward --address 0.0.0.0 service/frontend-service 80:80 > /tmp/pf-frontend.log 2>&1 &
+            nohup kubectl port-forward --address 0.0.0.0 service/backend-service 30000:3000 > /tmp/pf-backend.log 2>&1 &
 
             echo "✅ Déploiement terminé !"
