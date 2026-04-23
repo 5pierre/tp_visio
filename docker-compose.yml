@@ -1,37 +1,29 @@
 services:
-
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: backend
-    restart: unless-stopped
-    environment:
-      - PORT=3000
+    build: ./backend
     ports:
       - "3000:3000"
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
+    environment:
+      - DB_HOST=db
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+    depends_on:
+      - db
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: frontend
-    restart: unless-stopped
+    build: ./frontend
     ports:
-      - "80:80"
-    networks:
-      - app-network
-    depends_on:
-      backend:
-        condition: service_healthy
+      - "8080:80"
 
-networks:
-  app-network:
-    driver: bridge
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

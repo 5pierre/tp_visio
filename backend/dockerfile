@@ -1,16 +1,16 @@
-# Stage 1 
-FROM node:20-alpine AS builder
+# ---- Étape 1 : Build & tests ----
+FROM node:18-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
 RUN npm install
-COPY app.js app.test.js ./
+COPY src/ ./src/
 RUN npm test
 
-# Stage 2  
-FROM node:20-alpine AS production
+# ---- Étape 2 : Image de production (légère) ----
+FROM node:18-alpine AS production
 WORKDIR /app
 COPY package*.json ./
 RUN npm install --omit=dev
-COPY app.js .
+COPY src/ ./src/
 EXPOSE 3000
-CMD ["node", "app.js"]
+CMD ["node", "src/index.js"]

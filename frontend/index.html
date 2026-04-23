@@ -1,45 +1,37 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <title>Mon App</title>
-  <style>
-    body { font-family: sans-serif; max-width: 480px; margin: 60px auto; padding: 0 16px; }
-    input { width: 60px; padding: 6px; font-size: 14px; }
-    button { padding: 6px 14px; cursor: pointer; }
-    #status { font-weight: bold; }
-  </style>
+    <meta charset="UTF-8">
+    <title>Mon Application ✨</title>
+    <style>
+        body { font-family: sans-serif; background: #fce4ec; text-align: center; padding-top: 50px; }
+        .card { background: white; padding: 30px; border-radius: 20px; display: inline-block; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        button { padding: 10px 20px; border: none; border-radius: 10px; background: #ec407a; color: white; cursor: pointer; }
+    </style>
 </head>
 <body>
+    <div class="card">
+        <h1>Bienvenue sur mon application ✨</h1>
+        <button onclick="testConnection()">Tester la connexion Backend</button>
+        <div id="resultat" style="margin-top: 20px;"></div>
+    </div>
 
-  <h1>Mon App</h1>
-
-  <h2>Health</h2>
-  <p>Backend : <span id="status">...</span></p>
-
-  <h2>Additionneur</h2>
-  <input id="a" type="number" value="2" />
-  +
-  <input id="b" type="number" value="3" />
-  <button onclick="add()">Calculer</button>
-  <p id="result"></p>
-
-  <script>
-    const API = window.API_URL || "http://localhost:3000";
-
-    fetch(API + "/health")
-      .then(r => r.json())
-      .then(d => document.getElementById("status").textContent = d.status)
-      .catch(() => document.getElementById("status").textContent = "erreur");
-
-    function add() {
-      const a = document.getElementById("a").value;
-      const b = document.getElementById("b").value;
-      fetch(`${API}/add?a=${a}&b=${b}`)
-        .then(r => r.json())
-        .then(d => document.getElementById("result").textContent = "Résultat : " + (d.result ?? d.error));
-    }
-  </script>
-
+    <script>
+        async function testConnection() {
+            const resDiv = document.getElementById('resultat');
+            try {
+                const backendUrl = window.location.hostname === 'localhost'
+                    ? 'http://localhost:3000'
+                    : `http://${window.location.hostname}:3000`;
+                const response = await fetch(`${backendUrl}/health`);
+                const data = await response.json();
+                resDiv.innerHTML = `✅ Backend répond : ${data.status}`;
+                resDiv.style.color = "green";
+            } catch (err) {
+                resDiv.innerHTML = "❌ Erreur de connexion au backend.";
+                resDiv.style.color = "red";
+            }
+        }
+    </script>
 </body>
 </html>
