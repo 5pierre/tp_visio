@@ -67,7 +67,7 @@ jobs:
           host: ${{ secrets.VM_IP }}
           username: ${{ secrets.VM_USER }}
           password: ${{ secrets.VM_PASSWORD }}
-          command_timeout: 2m
+          command_timeout: 10m
           script: |
             # Redémarrer les pods (Kubernetes récupère les nouvelles images DockerHub tout seul)
             kubectl rollout restart deployment/backend
