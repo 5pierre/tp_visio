@@ -1,4 +1,63 @@
-# ── 3. Déploiement sur VM Azure ─────────────────────────────────
+name: Pipeline CI/CD
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+
+  # ── 1. Tests ────────────────────────────────────────────────────
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Installer les dépendances
+        working-directory: ./backend
+        run: npm install
+
+      - name: Lancer les tests
+        working-directory: ./backend
+        run: npm test
+        env:
+          NODE_ENV: test
+
+  # ── 2. Build & Push Docker ──────────────────────────────────────
+  build-and-push:
+    name: Build & Push Docker
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Connexion DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build et Push Backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/backend:latest
+
+      - name: Build et Push Frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/frontend:latest
+
+  # ── 3. Déploiement sur VM Azure ─────────────────────────────────
   deploy:
     name: Déploiement Azure VM
     runs-on: ubuntu-latest
@@ -10,36 +69,59 @@
           host: ${{ secrets.VM_IP }}
           username: ${{ secrets.VM_USER }}
           password: ${{ secrets.VM_PASSWORD }}
-          command_timeout: 5m
+          command_timeout: 10m
           script: |
-            set -e
-
-            echo "--- Pulling latest images ---"
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/backend:latest
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/frontend:latest
-
-            echo "--- Applying K8s manifests ---"
-            cd ~/tp_visio
-            kubectl apply -f k8s/secret.yml
-            kubectl apply -f k8s/deployment.yml
-            kubectl apply -f k8s/frontend.yml
-
-            echo "--- Rolling restart ---"
+            # Restart deployments to pull fresh images
             kubectl rollout restart deployment/backend
             kubectl rollout restart deployment/frontend
 
-            echo "--- Waiting for rollout ---"
+            # Wait for rollouts to complete
             kubectl rollout status deployment/backend --timeout=120s
             kubectl rollout status deployment/frontend --timeout=120s
 
-            echo "--- Managing Port-Forwards ---"
-            # Tuer les anciens processus pour éviter les conflits
-            pkill -f "kubectl port-forward" || true
-            sleep 2
+            # ── Persistent port-forward via systemd ──
+            # Stop old port-forward processes
+            sudo systemctl stop pf-backend 2>/dev/null || true
+            sudo systemctl stop pf-frontend 2>/dev/null || true
 
-            # Relancer les port-forward en les détachant totalement de la session (plus de timeout !)
-            nohup kubectl port-forward --address 0.0.0.0 service/backend-service 30000:3000 > /dev/null 2>&1 < /dev/null &
-            nohup kubectl port-forward --address 0.0.0.0 service/frontend-service 30001:80 > /dev/null 2>&1 < /dev/null &
+            # Backend port-forward service (30000 -> backend:3000)
+            sudo tee /etc/systemd/system/pf-backend.service > /dev/null <<'EOF'
+            [Unit]
+            Description=kubectl port-forward backend
+            After=network.target
 
-            echo "--- Done ---"
-            kubectl get pods
+            [Service]
+            Type=simple
+            User=pierre
+            ExecStart=/usr/local/bin/kubectl port-forward --address 0.0.0.0 service/backend-service 30000:3000
+            Restart=always
+            RestartSec=5
+
+            [Install]
+            WantedBy=multi-user.target
+            EOF
+
+            # Frontend port-forward service (8080 -> frontend:80)
+            sudo tee /etc/systemd/system/pf-frontend.service > /dev/null <<'EOF'
+            [Unit]
+            Description=kubectl port-forward frontend
+            After=network.target
+
+            [Service]
+            Type=simple
+            User=pierre
+            ExecStart=/usr/local/bin/kubectl port-forward --address 0.0.0.0 service/frontend-service 8080:80
+            Restart=always
+            RestartSec=5
+
+            [Install]
+            WantedBy=multi-user.target
+            EOF
+
+            sudo systemctl daemon-reload
+            sudo systemctl enable pf-backend pf-frontend
+            sudo systemctl start pf-backend
+            sudo systemctl start pf-frontend
+
+            sleep 3
+            echo "✅ Déploiement terminé !"
